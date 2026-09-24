@@ -31,13 +31,6 @@ pub struct Collection {
     pub usage: Option<u32>,
 }
 
-// Uncommon long items handler
-// Prevents mistaking long items with short items
-pub struct LongItem<'a> {
-    pub tag: u8,
-    pub data: &'a [u8],
-}
-
 // Controller descryptor item types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ItemType {
@@ -58,6 +51,32 @@ impl ItemType {
         }
     }
 }
+
+// Short item counts with prefix, type, tag and data
+// 0000(tag)x00(type)00(data size)
+#[derive(Debug, Clone, Copy)]
+pub struct ShortItem<'a> {
+    pub prefix: u8,
+    pub item_type: ItemType,
+    pub tag: u8,
+    pub data: &'a [u8],
+}
+
+// Uncommon long items handler
+// Prevents mistaking long items with short items
+#[derive(Debug, Clone, Copy)]
+pub struct LongItem<'a> {
+    pub tag: u8,
+    pub data: &'a [u8],
+}
+
+// Raw item can be either long or short
+#[derive(Debug, Clone, Copy)]
+pub enum RawItem<'a> {
+    Short(ShortItem<'a>),
+    Long(LongItem<'a>),
+}
+
 
 // Multi-byte item values are stored least-significant byte first
 fn unsigned_value(data: &[u8]) -> u32 {
@@ -128,6 +147,8 @@ pub struct Usage {
     pub page: u32,
     pub id: u32,
 }
+
+
 
 fn main() {
     println!("Hello, world!");
