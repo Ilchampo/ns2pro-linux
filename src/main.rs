@@ -98,6 +98,37 @@ impl MainDataFlags {
     }
 }
 
+// Report Ids - a device can have several Report Ids (inputs, battery status)
+pub enum ReportKind {
+    Input,
+    Output,
+    Feature,
+}
+
+pub struct ReportKey {
+    pub kind: ReportKind,
+    pub id: Option<u8>,
+}
+
+pub struct Field {
+    pub report_id: Option<u8>,
+    pub bit_offeset: usize,
+    pub bit_size: usize,
+    pub usage_page: Option<u32>,
+    pub usage: Option<u32>,
+    pub logical_minimum: Option<i32>,
+    pub logical_maximum: Option<i32>,
+    pub flags: MainDataFlags,
+}
+
+// Usage Page + Usage are ambiguos, can mean completely different things depending on context
+// take into consideration vendor usage pages like 0xFF00 through 0xFFFF
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Usage {
+    pub page: u32,
+    pub id: u32,
+}
+
 fn main() {
     println!("Hello, world!");
 }
