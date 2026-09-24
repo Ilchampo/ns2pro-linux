@@ -1,11 +1,11 @@
-[package]
-name = "ns2pro-linux"
-version = "0.1.0"
-edition = "2024"
+[workspace]
+resolver = "2"
+members = ["crates/*"]
 
-[dependencies]
-anyhow = "1.0.104"
-serde = {version = "1.0.229", features = ["derive"]}
-serde_json = "1.0.151"
-thiserror = "2.0.21"
-tracing = "0.1.44"
+[workspace.package]
+edition = "2024"
+license = "GPL-3.0-or-later"
+version = "0.1.0"
+
+[workspace.dependencies]
+thiserror = "2"
