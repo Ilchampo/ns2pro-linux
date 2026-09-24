@@ -44,16 +44,16 @@ pub enum ItemType {
     Main,
     Global,
     Local,
-    Reserved
+    Reserved,
 }
 
 impl ItemType {
     fn from_prefix(prefix: u8) -> Self {
         match (prefix >> 2) & 0b11 {
-            0 => Self::Main,        // 00
-            1 => Self::Global,      // 01
-            2 => Self::Local,       // 10
-            3 => Self::Reserved,    // 11
+            0 => Self::Main,     // 00
+            1 => Self::Global,   // 01
+            2 => Self::Local,    // 10
+            3 => Self::Reserved, // 11
             _ => unreachable!(),
         }
     }
@@ -75,7 +75,26 @@ fn signed_value(data: &[u8]) -> i32 {
         [a] => i8::from_be_bytes([*a]) as i32,
         [a, b] => i16::from_be_bytes([*a, *b]) as i32,
         [a, b, c, d] => i32::from_be_bytes([*a, *b, *c, *d]),
-        _ => panic!("Invalid HID short-item payload length")
+        _ => panic!("Invalid HID short-item payload length"),
+    }
+}
+
+// For controller axes, we want to have Data, Variable and Absolute
+// As these are the most common
+#[derive(Debug, Clone, Copy)]
+pub struct MainDataFlags(u16);
+
+impl MainDataFlags {
+    pub fn is_constant(self) -> bool {
+        self.0 & 0b0000_0001 != 0
+    }
+
+    pub fn is_variable(self) -> bool {
+        self.0 & 0b0000_0010 != 0
+    }
+
+    pub fn is_absolute(self) -> bool {
+        self.0 & 0b0000_0100 != 0
     }
 }
 
