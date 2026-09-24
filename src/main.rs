@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 // Global items persist until replaced or restored through push/pop.
 #[derive(Debug, Clone, Default)]
 pub struct GlobalState {
@@ -9,6 +11,24 @@ pub struct GlobalState {
     pub report_size: Option<u32>,
     pub report_count: Option<u32>,
     pub report_id: Option<u8>,
+}
+
+// Decoded tags by type
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GlobalTag {
+    UsagePage,
+    LogicalMinimum,
+    LogicalMaximum,
+    PhysicalMinimum,
+    PhysicalMaximum,
+    UnitExponent,
+    Unit,
+    ReportSize,
+    ReportId,
+    ReportCount,
+    Push,
+    Pop,
+    Unknown(u8),
 }
 
 // Local usages accumulate until a main item consumes them
@@ -70,10 +90,31 @@ pub struct LongItem<'a> {
     pub data: &'a [u8],
 }
 
+pub struct MainItem<'a> {
+    pub data: &'a [u8],
+}
+
+pub struct GlobalItem<'a> {
+    pub data: &'a [u8],
+}
+
+pub struct LocalItem<'a> {
+    pub data: &'a [u8],
+}
+
 // Raw item can be either long or short
 #[derive(Debug, Clone, Copy)]
 pub enum RawItem<'a> {
     Short(ShortItem<'a>),
+    Long(LongItem<'a>),
+}
+
+// Convert raw items into a typed item representation
+pub enum Item<'a> {
+    Main(MainItem<'a>),
+    Global(GlobalItem<'a>),
+    Local(LocalItem<'a>),
+    Reserved(ShortItem<'a>),
     Long(LongItem<'a>),
 }
 
@@ -126,6 +167,11 @@ pub enum ReportKind {
 pub struct ReportKey {
     pub kind: ReportKind,
     pub id: Option<u8>,
+}
+
+pub struct ReportLayouts {
+    next_bit: HashMap<ReportKey, usize>,
+    fields: HashMap<ReportKey, Vec<Field>>,
 }
 
 pub struct Field {
@@ -185,7 +231,7 @@ impl<'a> ItemIter<'a> {
     fn parse_long(&mut self, start: usize) -> Result<RawItem<'a>, ParseError> {
         if self.bytes.len() - self.offset < 2 {
             self.offset = self.bytes.len();
-            return Err(ParseError::TruncatedLongHeader { offset: start })
+            return Err(ParseError::TruncatedLongHeader { offset: start });
         }
 
         let size = self.bytes[self.offset] as usize;
@@ -197,7 +243,11 @@ impl<'a> ItemIter<'a> {
 
         if remaining < size {
             self.offset = self.bytes.len();
-            return Err(ParseError::TruncatedLong { offset: start, declared: size, remaining })
+            return Err(ParseError::TruncatedLong {
+                offset: start,
+                declared: size,
+                remaining,
+            });
         }
 
         let data = &self.bytes[self.offset..self.offset + size];
@@ -229,7 +279,7 @@ impl<'a> Iterator for ItemIter<'a> {
             1 => 1,
             2 => 2,
             3 => 4,
-            _ => unreachable!()
+            _ => unreachable!(),
         };
 
         let remaining = self.bytes.len() - self.offset;
@@ -237,7 +287,11 @@ impl<'a> Iterator for ItemIter<'a> {
         if remaining < size {
             self.offset = self.bytes.len();
 
-            return Some(Err(ParseError::TruncatedShort { offset: start, required: size, remaining }))
+            return Some(Err(ParseError::TruncatedShort {
+                offset: start,
+                required: size,
+                remaining,
+            }));
         }
 
         let data = &self.bytes[self.offset..self.offset + size];
@@ -247,13 +301,48 @@ impl<'a> Iterator for ItemIter<'a> {
             0 => ItemType::Main,
             1 => ItemType::Global,
             2 => ItemType::Local,
-            _ => ItemType::Reserved
+            _ => ItemType::Reserved,
         };
 
         let tag = prefix >> 4;
 
-        Some(Ok(RawItem::Short(ShortItem { prefix, item_type, tag, data })))
+        Some(Ok(RawItem::Short(ShortItem {
+            prefix,
+            item_type,
+            tag,
+            data,
+        })))
     }
+}
+
+pub struct DescriptorBuilder {
+    global: GlobalState,
+    global_stack: Vec<GlobalState>,
+    local: LocalState,
+    collections: Vec<Collection>,
+    reports: ReportLayouts,
+}
+
+impl DescriptorBuilder {
+    fn apply_usage_page(&mut self, value: u32) {
+        self.global.usage_page = Some(value);
+    }
+
+    fn apply_usage(&mut self, id: u32) {
+        if let Some(page) = self.global.usage_page {
+            self.local.usages.push(Usage { page, id });
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SemanticError {
+    #[error("Input item requires Report Size")]
+    MissingReportSize,
+    #[error("Input item requires Report Count")]
+    MissingReportCount,
+    #[error("usage range is descending: {min:#x}..{max:#x}")]
+    InvalidUsageRange { min: u32, max: u32 },
 }
 
 fn main() {
