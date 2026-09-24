@@ -1,19 +1,21 @@
-//! Syntactic parsing of a descriptor byte stream.
+//! Syntactic parsing of a descriptor byte stream
 
 use crate::{ItemType, LongItem, RawItem, ShortItem};
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum ParseError {
-    #[error(
-        "short item at offset {offset} requires {required} payload bytes, only {remaining} remain"
-    )]
+    #[error("short item at offset {offset} requires {required} payload bytes, only {remaining} remain")]
     TruncatedShort {
         offset: usize,
         required: usize,
         remaining: usize,
     },
+    
     #[error("long item header is truncated at offset {offset}")]
-    TruncatedLongHeader { offset: usize },
+    TruncatedLongHeader { 
+        offset: usize
+    },
+    
     #[error("long item at offset {offset} declares {declared} bytes, only {remaining} remain")]
     TruncatedLong {
         offset: usize,
@@ -22,7 +24,7 @@ pub enum ParseError {
     },
 }
 
-/// Lazily splits descriptor bytes into borrowed raw items.
+/// Lazily splits descriptor bytes into borrowed raw items
 pub struct ItemIter<'a> {
     bytes: &'a [u8],
     offset: usize,
@@ -42,10 +44,14 @@ impl<'a> ItemIter<'a> {
         // A long item stores its payload length and tag after the 0xFE prefix.
         let size = self.bytes[self.offset] as usize;
         let tag = self.bytes[self.offset + 1];
+        
         self.offset += 2;
+        
         if self.remaining() < size {
             let remaining = self.remaining();
+        
             self.finish();
+        
             return Err(ParseError::TruncatedLong {
                 offset: start,
                 declared: size,
@@ -55,6 +61,7 @@ impl<'a> ItemIter<'a> {
 
         let data = &self.bytes[self.offset..self.offset + size];
         self.offset += size;
+        
         Ok(RawItem::Long(LongItem { tag, data }))
     }
 
@@ -62,8 +69,8 @@ impl<'a> ItemIter<'a> {
         self.bytes.len() - self.offset
     }
 
+    // A malformed item consumes the rest so one descriptor yields one error.
     fn finish(&mut self) {
-        // A malformed item consumes the rest so one descriptor yields one error.
         self.offset = self.bytes.len();
     }
 }
@@ -78,16 +85,21 @@ impl<'a> Iterator for ItemIter<'a> {
 
         let start = self.offset;
         let prefix = self.bytes[self.offset];
+
         self.offset += 1;
+
         if prefix == 0xFE {
             return Some(self.parse_long(start));
         }
 
         // In HID's size code, binary 11 means four bytes rather than three.
         let size = [0, 1, 2, 4][usize::from(prefix & 0b11)];
+
         if self.remaining() < size {
             let remaining = self.remaining();
+
             self.finish();
+            
             return Some(Err(ParseError::TruncatedShort {
                 offset: start,
                 required: size,
@@ -96,7 +108,9 @@ impl<'a> Iterator for ItemIter<'a> {
         }
 
         let data = &self.bytes[self.offset..self.offset + size];
+        
         self.offset += size;
+        
         Some(Ok(RawItem::Short(ShortItem {
             prefix,
             item_type: ItemType::from_prefix(prefix),
@@ -116,12 +130,14 @@ mod tests {
         let RawItem::Short(item) = ItemIter::new(&bytes).next().unwrap().unwrap() else {
             panic!("expected a short item");
         };
+        
         assert_eq!(item.data, &[1, 2, 3, 4]);
     }
 
     #[test]
     fn rejects_truncated_short_item() {
         let error = ItemIter::new(&[0x06, 1]).next().unwrap().unwrap_err();
+        
         assert_eq!(
             error,
             ParseError::TruncatedShort {
@@ -138,6 +154,7 @@ mod tests {
             ItemIter::new(&[0xFE]).next().unwrap().unwrap_err(),
             ParseError::TruncatedLongHeader { offset: 0 }
         );
+        
         assert_eq!(
             ItemIter::new(&[0xFE, 2, 0x42, 0xAA])
                 .next()
@@ -155,6 +172,7 @@ mod tests {
     fn parses_long_item_without_losing_sync() {
         let bytes = [0xFE, 2, 0x42, 0xAA, 0xBB, 0x05, 0x01];
         let mut items = ItemIter::new(&bytes);
+        
         assert_eq!(
             items.next().unwrap().unwrap(),
             RawItem::Long(LongItem {
@@ -162,6 +180,7 @@ mod tests {
                 data: &[0xAA, 0xBB],
             })
         );
+        
         assert!(matches!(items.next().unwrap().unwrap(), RawItem::Short(_)));
         assert!(items.next().is_none());
     }
