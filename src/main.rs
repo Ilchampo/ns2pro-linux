@@ -77,7 +77,6 @@ pub enum RawItem<'a> {
     Long(LongItem<'a>),
 }
 
-
 // Multi-byte item values are stored least-significant byte first
 fn unsigned_value(data: &[u8]) -> u32 {
     let mut bytes = [0u8; 4];
@@ -148,7 +147,114 @@ pub struct Usage {
     pub id: u32,
 }
 
+// Parsing errors
+#[derive(Debug, thiserror::Error)]
+pub enum ParseError {
+    #[error(
+        "short item at offset {offset} requires {required} payload bytes, only {remaining} remain"
+    )]
+    TruncatedShort {
+        offset: usize,
+        required: usize,
+        remaining: usize,
+    },
 
+    #[error("long item header is truncated at offset {offset}")]
+    TruncatedLongHeader { offset: usize },
+
+    #[error("long item at offset {offset} declares {declared} bytes, only {remaining} remain")]
+    TruncatedLong {
+        offset: usize,
+        declared: usize,
+        remaining: usize,
+    },
+}
+
+// Iterators to make item parsing composable
+pub struct ItemIter<'a> {
+    bytes: &'a [u8],
+    offset: usize,
+}
+
+// Utils for new and parse_long, necessary for Iterator
+impl<'a> ItemIter<'a> {
+    pub fn new(bytes: &'a [u8]) -> Self {
+        Self { bytes, offset: 0 }
+    }
+
+    fn parse_long(&mut self, start: usize) -> Result<RawItem<'a>, ParseError> {
+        if self.bytes.len() - self.offset < 2 {
+            self.offset = self.bytes.len();
+            return Err(ParseError::TruncatedLongHeader { offset: start })
+        }
+
+        let size = self.bytes[self.offset] as usize;
+        let tag = self.bytes[self.offset + 1];
+
+        self.offset += 2;
+
+        let remaining = self.bytes.len() - self.offset;
+
+        if remaining < size {
+            self.offset = self.bytes.len();
+            return Err(ParseError::TruncatedLong { offset: start, declared: size, remaining })
+        }
+
+        let data = &self.bytes[self.offset..self.offset + size];
+        self.offset += size;
+
+        Ok(RawItem::Long(LongItem { tag, data }))
+    }
+}
+
+impl<'a> Iterator for ItemIter<'a> {
+    type Item = Result<RawItem<'a>, ParseError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.offset >= self.bytes.len() {
+            return None;
+        }
+
+        let start = self.offset;
+        let prefix = self.bytes[self.offset];
+
+        self.offset += 1;
+
+        if prefix == 0xFE {
+            return Some(self.parse_long(start));
+        }
+
+        let size = match prefix & 0b11 {
+            0 => 0,
+            1 => 1,
+            2 => 2,
+            3 => 4,
+            _ => unreachable!()
+        };
+
+        let remaining = self.bytes.len() - self.offset;
+
+        if remaining < size {
+            self.offset = self.bytes.len();
+
+            return Some(Err(ParseError::TruncatedShort { offset: start, required: size, remaining }))
+        }
+
+        let data = &self.bytes[self.offset..self.offset + size];
+        self.offset += size;
+
+        let item_type = match (prefix >> 2) & 0b11 {
+            0 => ItemType::Main,
+            1 => ItemType::Global,
+            2 => ItemType::Local,
+            _ => ItemType::Reserved
+        };
+
+        let tag = prefix >> 4;
+
+        Some(Ok(RawItem::Short(ShortItem { prefix, item_type, tag, data })))
+    }
+}
 
 fn main() {
     println!("Hello, world!");
