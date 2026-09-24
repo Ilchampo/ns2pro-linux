@@ -1,6 +1,6 @@
-//! HID item representations and tag decoding.
+//! HID item representations and tag decoding
 
-/// The two type bits in a short-item prefix.
+/// The two type bits in a short-item prefix
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ItemType {
     Main,
@@ -21,7 +21,7 @@ impl ItemType {
     }
 }
 
-/// A short item whose payload borrows from the original descriptor.
+/// A short item whose payload borrows from the original descriptor
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ShortItem<'a> {
     pub prefix: u8,
@@ -30,14 +30,14 @@ pub struct ShortItem<'a> {
     pub data: &'a [u8],
 }
 
-/// The uncommon long-item format, retained without interpreting its tag.
+/// The uncommon long-item format, retained without interpreting its tag
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LongItem<'a> {
     pub tag: u8,
     pub data: &'a [u8],
 }
 
-/// An item split from the byte stream, before its type-specific tag is decoded.
+/// An item split from the byte stream, before its type-specific tag is decoded
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RawItem<'a> {
     Short(ShortItem<'a>),
@@ -142,18 +142,20 @@ pub struct MainItem<'a> {
     pub tag: MainTag,
     pub data: &'a [u8],
 }
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GlobalItem<'a> {
     pub tag: GlobalTag,
     pub data: &'a [u8],
 }
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LocalItem<'a> {
     pub tag: LocalTag,
     pub data: &'a [u8],
 }
 
-/// A short item with a tag decoded in the context of its item type.
+/// A short item with a tag decoded in the context of its item type
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Item<'a> {
     Main(MainItem<'a>),
@@ -186,7 +188,7 @@ impl<'a> From<RawItem<'a>> for Item<'a> {
     }
 }
 
-/// Bit flags carried by Input, Output, and Feature main items.
+/// Bit flags carried by Input, Output, and Feature main items
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MainDataFlags(u32);
 

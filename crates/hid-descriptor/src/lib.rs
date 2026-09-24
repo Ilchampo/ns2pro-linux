@@ -1,7 +1,7 @@
-//! Parsing primitives for USB HID report descriptors.
+//! Parsing primitives for USB HID report descriptors
 //!
 //! Parsing happens in two layers: [`ItemIter`] splits bytes into raw HID items,
-//! then [`DescriptorBuilder`] applies the stateful HID rules to typed items.
+//! then [`DescriptorBuilder`] applies the stateful HID rules to typed items
 
 mod item;
 mod parser;
